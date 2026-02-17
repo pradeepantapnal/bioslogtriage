@@ -10,6 +10,7 @@ import sys
 from triage.config import DEFAULT_MODEL, OLLAMA_HOST
 from triage.llm.evidence_pack import build_evidence_pack
 from triage.llm.ollama_client import OllamaClient
+from triage.llm.repair import repair_llm_synthesis
 from triage.llm.synthesis import build_system_prompt, build_user_prompt
 from triage.version import __version__
 from triage.normalize import load_and_normalize, normalization_stats
@@ -130,6 +131,24 @@ def _select_boot_blocking_event_id(events: list[dict]) -> str | None:
     return selected.get("event_id")
 
 
+def _select_best_llm_event_id(output: dict) -> str:
+    boot_timeline = output.get("boot_timeline")
+    if isinstance(boot_timeline, dict):
+        boot_blocking_event_id = boot_timeline.get("boot_blocking_event_id")
+        if isinstance(boot_blocking_event_id, str) and boot_blocking_event_id:
+            return boot_blocking_event_id
+
+    llm_input = output.get("llm_input")
+    if isinstance(llm_input, dict):
+        selected_events = llm_input.get("selected_events")
+        if isinstance(selected_events, list):
+            for event in selected_events:
+                if isinstance(event, dict):
+                    event_id = event.get("event_id")
+                    if isinstance(event_id, str) and event_id:
+                        return event_id
+
+    return "evt-0"
 
 
 def _llm_fallback(
@@ -404,6 +423,7 @@ def main(argv: list[str] | None = None) -> int:
                 candidate_keys = sorted(candidate.keys())
             if "evidence_pack" in candidate or "selected_events" in candidate:
                 raise ValueError("LLM echoed input evidence pack instead of producing llm_synthesis")
+            candidate = repair_llm_synthesis(candidate, best_event_id=_select_best_llm_event_id(output))
             _validate_llm_synthesis(candidate)
             output["llm_synthesis"] = candidate
             llm_ok = True

@@ -153,6 +153,35 @@ def test_llm_synthesis_unwraps_nested_object(monkeypatch, capsys) -> None:
     assert data["llm_synthesis"] == wrapped_synthesis["llm_synthesis"]
     validate_output(data)
 
+
+
+def test_llm_synthesis_repairs_missing_evidence_strings(monkeypatch, capsys) -> None:
+    fixture_path = Path("fixtures/synthetic_logs/minimal_boot.log")
+
+    malformed_synthesis = {
+        "overall_confidence": 0.61,
+        "executive_summary": "Likely memory training issue.",
+        "root_cause_hypotheses": [],
+        "recommended_next_actions": [],
+        "missing_evidence": ["Need DIMM SPD dump"],
+    }
+
+    monkeypatch.setattr(
+        "triage.llm.ollama_client.OllamaClient.generate_json",
+        lambda self, system, user, schema: malformed_synthesis,
+    )
+
+    exit_code = cli.main(["--input", str(fixture_path), "--llm"])
+
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert exit_code == 0
+    repaired = data["llm_synthesis"]["missing_evidence"][0]
+    assert repaired["need"] == "Need DIMM SPD dump"
+    assert repaired["priority"] == "medium"
+    assert repaired["supporting_event_ids"]
+    validate_output(data)
+
 def test_llm_synthesis_generation_exception_uses_fallback(monkeypatch, capsys) -> None:
     fixture_path = Path("fixtures/synthetic_logs/minimal_boot.log")
 
