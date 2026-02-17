@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from triage.llm.ollama_client import OllamaClient
+from triage.llm.ollama_client import OllamaClient, _post
 
 
 class _FakeResponse:
@@ -41,6 +41,7 @@ def test_generate_json_posts_expected_payload() -> None:
             "format": "json",
         },
         60,
+        "qwen2.5:7b",
     )
 
 
@@ -53,3 +54,21 @@ def test_generate_json_invalid_json_raises() -> None:
     ):
         with pytest.raises(ValueError, match="invalid JSON content"):
             client.generate_json(system="sys", user="usr", schema={"type": "object"})
+
+
+def test_post_read_timeout_has_actionable_message() -> None:
+    requests = pytest.importorskip("requests")
+
+    with patch("requests.post", side_effect=requests.ReadTimeout("slow")):
+        with pytest.raises(RuntimeError, match="llm-max-chars") as exc:
+            _post(
+                "http://localhost:11434/api/generate",
+                {"prompt": "abc" * 20},
+                timeout_s=123,
+                model="qwen2.5:3b",
+            )
+
+    msg = str(exc.value)
+    assert "model=qwen2.5:3b" in msg
+    assert "timeout_s=123" in msg
+    assert "prompt_chars=60" in msg

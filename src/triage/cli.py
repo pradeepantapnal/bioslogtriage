@@ -35,14 +35,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--llm-top-k",
         type=int,
-        default=8,
-        help="Number of highest-ranked events to include in LLM evidence pack (default: 8)",
+        default=5,
+        help="Number of highest-ranked events to include in LLM evidence pack (default: 5)",
     )
     parser.add_argument(
         "--llm-max-chars",
         type=int,
-        default=30000,
-        help="Max serialized character budget for LLM evidence pack (default: 30000)",
+        default=12000,
+        help="Max serialized character budget for LLM evidence pack (default: 12000)",
+    )
+    parser.add_argument(
+        "--llm-timeout-s",
+        type=int,
+        default=300,
+        help="Timeout in seconds for Ollama generate requests (default: 300)",
+    )
+    parser.add_argument(
+        "--dump-llm-prompt",
+        default=None,
+        help="Optional path to write the exact LLM prompt sent to Ollama",
     )
     parser.add_argument(
         "--version",
@@ -69,8 +80,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--context-lines",
         type=int,
-        default=20,
-        help="Number of lines before/after event hit line to include as evidence context (default: 20)",
+        default=10,
+        help="Number of lines before/after event hit line to include as evidence context (default: 10)",
     )
     parser.add_argument(
         "--no-evidence",
@@ -199,13 +210,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         output["llm_input"] = evidence_pack
 
-        client = OllamaClient(host=args.ollama_host, model=args.model)
+        prompt = json.dumps(evidence_pack, ensure_ascii=False, separators=(",", ":"))
+        if args.dump_llm_prompt:
+            Path(args.dump_llm_prompt).write_text(prompt, encoding="utf-8")
+
+        client = OllamaClient(host=args.ollama_host, model=args.model, timeout_s=max(1, args.llm_timeout_s))
         output["llm_synthesis"] = client.generate_json(
             system=(
                 "You must only use facts from the provided evidence_pack JSON. "
                 "Cite event_id(s) for every claim."
             ),
-            user=json.dumps(evidence_pack, ensure_ascii=False),
+            user=prompt,
             schema={"type": "object"},
         )
 
