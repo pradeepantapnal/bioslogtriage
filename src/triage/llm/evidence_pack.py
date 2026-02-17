@@ -127,6 +127,30 @@ def _drop_evidence_lines(event: dict[str, Any]) -> bool:
 
 
 
+def _shrink_event_lines_to_hit_line(event: dict[str, Any]) -> bool:
+    """Shrink evidence lines to only include the event hit line when available."""
+    line_start = event.get("where", {}).get("line_range", {}).get("start")
+    if not isinstance(line_start, int):
+        return False
+
+    changed = False
+    for evidence in event.get("evidence", []):
+        if not isinstance(evidence, dict):
+            continue
+        lines = evidence.get("lines")
+        if not isinstance(lines, list) or not lines:
+            continue
+
+        hit_line = next((line for line in lines if isinstance(line, dict) and line.get("idx") == line_start), None)
+        if hit_line is None:
+            hit_line = lines[0]
+
+        evidence["lines"] = [copy.deepcopy(hit_line)]
+        changed = True
+
+    return changed
+
+
 def build_evidence_pack(output: dict, top_k: int = 8, max_chars: int = 30000) -> dict:
     """Build a budget-bounded evidence pack suitable for LLM prompting."""
     events = output.get("events") if isinstance(output.get("events"), list) else []
@@ -158,11 +182,32 @@ def build_evidence_pack(output: dict, top_k: int = 8, max_chars: int = 30000) ->
         trimming_applied.append("dropped_low_ranked_event")
         final_chars = _serialized_size_chars(evidence_pack)
 
+    if final_chars > max_chars and selected_events:
+        for idx in range(len(selected_events) - 1, -1, -1):
+            if _shrink_event_lines_to_hit_line(selected_events[idx]):
+                trimming_applied.append(f"shrunk_to_hit_line:event_index={idx}")
+                final_chars = _serialized_size_chars(evidence_pack)
+                if final_chars <= max_chars:
+                    break
+
     evidence_pack["evidence_pack_meta"] = {
         "top_k_requested": top_k,
         "events_included": len(selected_events),
         "max_chars": max_chars,
-        "final_chars": _serialized_size_chars(evidence_pack),
-        "trimming_applied": trimming_applied,
+        "trimming_applied": trimming_applied[:12],
+        "trimming_count": len(trimming_applied),
     }
+
+    while _serialized_size_chars(evidence_pack) > max_chars and len(selected_events) > 1:
+        selected_events.pop()
+        trimming_applied.append("dropped_low_ranked_event")
+        evidence_pack["evidence_pack_meta"]["events_included"] = len(selected_events)
+        evidence_pack["evidence_pack_meta"]["trimming_applied"] = trimming_applied[:12]
+        evidence_pack["evidence_pack_meta"]["trimming_count"] = len(trimming_applied)
+
+    evidence_pack["evidence_pack_meta"]["final_chars"] = _serialized_size_chars(evidence_pack)
+    if evidence_pack["evidence_pack_meta"]["final_chars"] > max_chars:
+        evidence_pack["evidence_pack_meta"]["trimming_applied"] = ["meta_compacted"]
+        evidence_pack["evidence_pack_meta"]["final_chars"] = _serialized_size_chars(evidence_pack)
+
     return evidence_pack

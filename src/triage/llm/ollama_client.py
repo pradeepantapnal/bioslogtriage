@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 
-def _post(url: str, payload: dict[str, Any], timeout_s: int) -> Any:
+def _post(url: str, payload: dict[str, Any], timeout_s: int, model: str) -> Any:
     """Call requests.post lazily so tests can run without installed dependency."""
     try:
         import requests
@@ -15,6 +15,12 @@ def _post(url: str, payload: dict[str, Any], timeout_s: int) -> Any:
 
     try:
         return requests.post(url, json=payload, timeout=timeout_s)
+    except requests.ReadTimeout as exc:
+        prompt_len = len(str(payload.get("prompt", "")))
+        raise RuntimeError(
+            f"Ollama request timed out (model={model}, timeout_s={timeout_s}, prompt_chars={prompt_len}). "
+            "Try reducing --llm-max-chars or --llm-top-k, or increase --llm-timeout-s."
+        ) from exc
     except requests.RequestException as exc:
         raise RuntimeError(f"Failed to connect to Ollama at {url}: {exc}") from exc
 
@@ -39,7 +45,7 @@ class OllamaClient:
         }
         url = f"{self.host}/api/generate"
 
-        response = _post(url, payload, self.timeout_s)
+        response = _post(url, payload, self.timeout_s, self.model)
 
         if response.status_code != 200:
             raise RuntimeError(
