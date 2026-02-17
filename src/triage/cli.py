@@ -8,6 +8,8 @@ from pathlib import Path
 import sys
 
 from triage.config import DEFAULT_MODEL, OLLAMA_HOST
+from triage.llm.evidence_pack import build_evidence_pack
+from triage.llm.ollama_client import OllamaClient
 from triage.version import __version__
 from triage.normalize import load_and_normalize, normalization_stats
 from triage.phases import build_segments, detect_phases
@@ -30,6 +32,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--llm", action="store_true", help="Enable local Ollama call")
     parser.add_argument("--ollama-host", default=OLLAMA_HOST, help="Ollama host URL")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model name")
+    parser.add_argument(
+        "--llm-top-k",
+        type=int,
+        default=8,
+        help="Number of highest-ranked events to include in LLM evidence pack (default: 8)",
+    )
+    parser.add_argument(
+        "--llm-max-chars",
+        type=int,
+        default=30000,
+        help="Max serialized character budget for LLM evidence pack (default: 30000)",
+    )
     parser.add_argument(
         "--version",
         action="store_true",
@@ -176,6 +190,24 @@ def main(argv: list[str] | None = None) -> int:
         "llm_enabled": args.llm,
         "boot_timeline": boot_timeline,
     }
+
+    if args.llm:
+        evidence_pack = build_evidence_pack(
+            output,
+            top_k=max(0, args.llm_top_k),
+            max_chars=max(1, args.llm_max_chars),
+        )
+        output["llm_input"] = evidence_pack
+
+        client = OllamaClient(host=args.ollama_host, model=args.model)
+        output["llm_synthesis"] = client.generate_json(
+            system=(
+                "You must only use facts from the provided evidence_pack JSON. "
+                "Cite event_id(s) for every claim."
+            ),
+            user=json.dumps(evidence_pack, ensure_ascii=False),
+            schema={"type": "object"},
+        )
 
     if args.validate:
         try:
