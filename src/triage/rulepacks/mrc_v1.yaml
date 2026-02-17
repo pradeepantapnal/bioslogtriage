@@ -1,0 +1,75 @@
+{
+  "version": "1.0",
+  "rules": [
+    {
+      "id": "R_MRC_MILESTONE_001",
+      "category": "memory.mrc",
+      "subcategory": "milestone",
+      "severity": "info",
+      "base_confidence": 0.9,
+      "regex": "(?i)(?:\\bMRC start\\b|\\bEntering MRC\\b)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_MRC_MILESTONE_002",
+      "category": "memory.mrc",
+      "subcategory": "milestone",
+      "severity": "info",
+      "base_confidence": 0.9,
+      "regex": "(?i)(?:\\bMRC done\\b|\\bMemoryInit complete\\b)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_MRC_SPD_ADDR_ZERO_001",
+      "category": "memory.mrc",
+      "subcategory": "spd_addr_zero",
+      "severity": "medium",
+      "base_confidence": 0.9,
+      "regex": "(?i)MC(?P<mc>\\d+)\\s+C(?P<ch>\\d+)\\s+D(?P<dimm>\\d+)\\s+SPD Address:\\s+0x(?P<spd>00)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_MRC_SPD_READ_FATAL_001",
+      "category": "memory.mrc",
+      "subcategory": "spd_read_failure",
+      "severity": "fatal",
+      "base_confidence": 0.95,
+      "regex": "(?i)(?:SPD read fail|SPD CRC|SMBus read fail|NACK|timeout).*(?:fatal|abort|cannot continue)|(?:fatal|abort|cannot continue).*(?:SPD read fail|SPD CRC|SMBus read fail|NACK|timeout)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_MRC_SPD_READ_HIGH_001",
+      "category": "memory.mrc",
+      "subcategory": "spd_read_failure",
+      "severity": "high",
+      "base_confidence": 0.9,
+      "regex": "(?i)(?:SPD read fail|SPD CRC|SMBus read fail|NACK|timeout)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_MRC_TRAINING_FAIL_001",
+      "category": "memory.mrc",
+      "subcategory": "training_failure",
+      "severity": "fatal",
+      "base_confidence": 0.95,
+      "regex": "(?i)(?:Training.*fail|Margin.*fail|retry.*exhausted|MRC.*fatal)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_MRC_TOPOLOGY_FATAL_001",
+      "category": "memory.mrc",
+      "subcategory": "memory_topology_invalid",
+      "severity": "fatal",
+      "base_confidence": 0.97,
+      "regex": "(?i)(?:Installed memory:\\s*0\\s*MB|No memory installed|Detected memory:\\s*0\\s*MB)",
+      "required_phase": null,
+      "extracts": {}
+    }
+  ]
+}

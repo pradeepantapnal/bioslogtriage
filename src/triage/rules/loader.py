@@ -9,7 +9,6 @@ _REQUIRED_RULE_KEYS = {
     "id",
     "category",
     "severity",
-    "confidence",
     "regex",
     "required_phase",
 }
@@ -45,6 +44,9 @@ def load_rulepack(path: str) -> dict:
         missing = _REQUIRED_RULE_KEYS - rule.keys()
         if missing:
             raise ValueError(f"Rule #{idx} is missing required keys: {sorted(missing)}")
+
+        if "confidence" not in rule and "base_confidence" not in rule:
+            raise ValueError(f"Rule #{idx} must define confidence or base_confidence")
 
         if rule["required_phase"] is not None and rule["required_phase"] not in {"SEC", "PEI", "DXE", "BDS"}:
             raise ValueError(f"Rule #{idx} has invalid required_phase: {rule['required_phase']}")
