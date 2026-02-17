@@ -1,12 +1,60 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "TriageEvent",
+  "$id": "https://example.com/schemas/triage.schema.json",
+  "title": "bioslogtriage CLI output",
   "type": "object",
+  "required": [
+    "schema_version",
+    "normalization",
+    "events",
+    "llm_enabled"
+  ],
   "properties": {
-    "timestamp": { "type": "string" },
-    "severity": { "type": "string" },
-    "message": { "type": "string" }
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "normalization": {
+      "type": "object",
+      "required": ["line_count"],
+      "properties": {
+        "line_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "llm_enabled": {
+      "type": "boolean"
+    },
+    "run_metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "boot_timeline": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "signals": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "deterministic_summary": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "llm_synthesis": {
+      "type": "object",
+      "additionalProperties": true
+    }
   },
-  "required": ["timestamp", "severity", "message"],
-  "additionalProperties": false
+  "additionalProperties": true
 }

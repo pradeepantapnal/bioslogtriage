@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 
 from triage.config import DEFAULT_MODEL, OLLAMA_HOST
+from triage.schemas.validate import validate_output
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -15,6 +17,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--llm", action="store_true", help="Enable local Ollama call")
     parser.add_argument("--ollama-host", default=OLLAMA_HOST, help="Ollama host URL")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model name")
+
+    validation_group = parser.add_mutually_exclusive_group()
+    validation_group.add_argument(
+        "--validate",
+        dest="validate",
+        action="store_true",
+        default=True,
+        help="Validate JSON output against Schema v0 (default: enabled)",
+    )
+    validation_group.add_argument(
+        "--no-validate",
+        dest="validate",
+        action="store_false",
+        help="Disable schema validation",
+    )
     return parser
 
 
@@ -31,6 +48,13 @@ def main(argv: list[str] | None = None) -> int:
         "events": [],
         "llm_enabled": args.llm,
     }
+
+    if args.validate:
+        try:
+            validate_output(output)
+        except ValueError as exc:
+            print(f"Output validation failed: {exc}", file=sys.stderr)
+            return 2
 
     print(json.dumps(output, indent=2))
     return 0
