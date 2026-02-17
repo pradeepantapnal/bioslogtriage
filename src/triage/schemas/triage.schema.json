@@ -460,6 +460,10 @@
               "items": {
                 "type": "string"
               }
+            },
+            "trimming_count": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "additionalProperties": false
