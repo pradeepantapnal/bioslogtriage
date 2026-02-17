@@ -10,6 +10,7 @@ import sys
 from triage.config import DEFAULT_MODEL, OLLAMA_HOST
 from triage.llm.evidence_pack import build_evidence_pack
 from triage.llm.ollama_client import OllamaClient
+from triage.llm.synthesis import build_system_prompt, build_user_prompt
 from triage.version import __version__
 from triage.normalize import load_and_normalize, normalization_stats
 from triage.phases import build_segments, detect_phases
@@ -129,6 +130,159 @@ def _select_boot_blocking_event_id(events: list[dict]) -> str | None:
     return selected.get("event_id")
 
 
+
+
+def _llm_fallback(error_type: str, message: str, detail: str = "") -> dict:
+    return {
+        "overall_confidence": 0.0,
+        "executive_summary": "LLM synthesis failed; see errors.",
+        "root_cause_hypotheses": [],
+        "recommended_next_actions": [],
+        "missing_evidence": [],
+        "errors": [
+            {
+                "type": error_type,
+                "message": message,
+                "detail": detail,
+            }
+        ],
+    }
+
+
+def _validate_llm_synthesis(llm_synthesis: dict) -> None:
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "overall_confidence",
+            "executive_summary",
+            "root_cause_hypotheses",
+            "recommended_next_actions",
+        ],
+        "properties": {
+            "model_info": {"type": "object", "additionalProperties": True},
+            "overall_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "executive_summary": {"type": "string", "minLength": 1, "maxLength": 2000},
+            "root_cause_hypotheses": {
+                "type": "array",
+                "maxItems": 5,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "title",
+                        "confidence",
+                        "supporting_event_ids",
+                        "reasoning",
+                        "next_actions",
+                    ],
+                    "properties": {
+                        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                        "supporting_event_ids": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {"type": "string"},
+                        },
+                        "reasoning": {"type": "string", "minLength": 1, "maxLength": 2000},
+                        "next_actions": {
+                            "type": "array",
+                            "maxItems": 8,
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": [
+                                    "action",
+                                    "priority",
+                                    "expected_signal",
+                                    "supporting_event_ids",
+                                ],
+                                "properties": {
+                                    "action": {"type": "string", "minLength": 1, "maxLength": 300},
+                                    "priority": {"type": "string", "enum": ["P0", "P1", "P2"]},
+                                    "expected_signal": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 300,
+                                    },
+                                    "supporting_event_ids": {
+                                        "type": "array",
+                                        "minItems": 1,
+                                        "items": {"type": "string"},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            "recommended_next_actions": {
+                "type": "array",
+                "maxItems": 10,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["action", "priority", "expected_signal", "supporting_event_ids"],
+                    "properties": {
+                        "action": {"type": "string", "minLength": 1, "maxLength": 300},
+                        "priority": {"type": "string", "enum": ["P0", "P1", "P2"]},
+                        "expected_signal": {"type": "string", "minLength": 1, "maxLength": 300},
+                        "supporting_event_ids": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {"type": "string"},
+                        },
+                    },
+                },
+            },
+            "missing_evidence": {
+                "type": "array",
+                "maxItems": 10,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["need", "why", "how", "priority", "supporting_event_ids"],
+                    "properties": {
+                        "need": {"type": "string", "minLength": 1, "maxLength": 200},
+                        "why": {"type": "string", "minLength": 1, "maxLength": 300},
+                        "how": {"type": "string", "minLength": 1, "maxLength": 300},
+                        "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+                        "supporting_event_ids": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {"type": "string"},
+                        },
+                    },
+                },
+            },
+            "errors": {
+                "type": "array",
+                "items": {"type": "object", "additionalProperties": True},
+            },
+        },
+    }
+
+    try:
+        import jsonschema
+    except ModuleNotFoundError:
+        required = {
+            "overall_confidence",
+            "executive_summary",
+            "root_cause_hypotheses",
+            "recommended_next_actions",
+        }
+        missing = required - set(llm_synthesis.keys())
+        if missing:
+            raise ValueError(f"missing required keys {sorted(missing)}")
+        return
+
+    validator = jsonschema.Draft202012Validator(schema)
+    errors = sorted(validator.iter_errors(llm_synthesis), key=lambda err: list(err.path))
+    if errors:
+        first = errors[0]
+        path = ".".join(str(part) for part in first.path) or "<root>"
+        raise ValueError(f"llm_synthesis validation failed at {path}: {first.message}")
+
 def main(argv: list[str] | None = None) -> int:
     """Entrypoint for the triage CLI."""
     args = build_parser().parse_args(argv)
@@ -210,19 +364,25 @@ def main(argv: list[str] | None = None) -> int:
         )
         output["llm_input"] = evidence_pack
 
-        prompt = json.dumps(evidence_pack, ensure_ascii=False, separators=(",", ":"))
+        user_prompt = build_user_prompt(evidence_pack)
         if args.dump_llm_prompt:
-            Path(args.dump_llm_prompt).write_text(prompt, encoding="utf-8")
+            Path(args.dump_llm_prompt).write_text(user_prompt, encoding="utf-8")
 
         client = OllamaClient(host=args.ollama_host, model=args.model, timeout_s=max(1, args.llm_timeout_s))
-        output["llm_synthesis"] = client.generate_json(
-            system=(
-                "You must only use facts from the provided evidence_pack JSON. "
-                "Cite event_id(s) for every claim."
-            ),
-            user=prompt,
-            schema={"type": "object"},
-        )
+        try:
+            llm_synthesis = client.generate_json(
+                system=build_system_prompt(),
+                user=user_prompt,
+                schema={"type": "object"},
+            )
+            _validate_llm_synthesis(llm_synthesis)
+            output["llm_synthesis"] = llm_synthesis
+        except Exception as exc:  # noqa: BLE001
+            output["llm_synthesis"] = _llm_fallback(
+                error_type=exc.__class__.__name__,
+                message="Failed to generate or validate LLM synthesis",
+                detail=str(exc),
+            )
 
     if args.validate:
         try:
