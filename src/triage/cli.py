@@ -357,20 +357,20 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     if args.llm:
-        evidence_pack = build_evidence_pack(
-            output,
-            top_k=max(0, args.llm_top_k),
-            max_chars=max(1, args.llm_max_chars),
-        )
-        output["llm_input"] = evidence_pack
-
-        user_prompt = build_user_prompt(evidence_pack)
-        if args.dump_llm_prompt:
-            Path(args.dump_llm_prompt).write_text(user_prompt, encoding="utf-8")
-
-        client = OllamaClient(host=args.ollama_host, model=args.model, timeout_s=max(1, args.llm_timeout_s))
         llm_ok = False
         try:
+            evidence_pack = build_evidence_pack(
+                output,
+                top_k=max(0, args.llm_top_k),
+                max_chars=max(1, args.llm_max_chars),
+            )
+            output["llm_input"] = evidence_pack
+
+            user_prompt = build_user_prompt(evidence_pack)
+            if args.dump_llm_prompt:
+                Path(args.dump_llm_prompt).write_text(user_prompt, encoding="utf-8")
+
+            client = OllamaClient(host=args.ollama_host, model=args.model, timeout_s=max(1, args.llm_timeout_s))
             candidate = client.generate_json(
                 system=build_system_prompt(),
                 user=user_prompt,
@@ -386,11 +386,14 @@ def main(argv: list[str] | None = None) -> int:
                 detail=str(exc),
             )
 
-        if not llm_ok and "llm_synthesis" not in output:
-            output["llm_synthesis"] = _llm_fallback(
-                error_type="RuntimeError",
-                message="Failed to generate or validate LLM synthesis",
-                detail="LLM synthesis status unknown",
+        if not llm_ok:
+            output["llm_synthesis"] = output.get(
+                "llm_synthesis",
+                _llm_fallback(
+                    error_type="RuntimeError",
+                    message="Failed to generate or validate LLM synthesis",
+                    detail="LLM synthesis status unknown",
+                ),
             )
 
     if args.validate:

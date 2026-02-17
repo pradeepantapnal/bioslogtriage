@@ -99,7 +99,9 @@ def test_llm_synthesis_generation_exception_uses_fallback(monkeypatch, capsys) -
     captured = capsys.readouterr()
     data = json.loads(captured.out)
     assert exit_code == 0
+    assert captured.err == ""
     assert data["llm_synthesis"]["overall_confidence"] == 0.0
     assert data["llm_synthesis"]["errors"]
     assert data["llm_synthesis"]["errors"][0]["type"] == "ValueError"
+    assert data["llm_synthesis"]["errors"][0]["message"] == "Failed to generate or validate LLM synthesis"
     validate_output(data)
