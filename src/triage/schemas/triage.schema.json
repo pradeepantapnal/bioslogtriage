@@ -16,9 +16,15 @@
     },
     "normalization": {
       "type": "object",
-      "required": ["line_count"],
+      "required": [
+        "line_count"
+      ],
       "properties": {
         "line_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "empty_line_count": {
           "type": "integer",
           "minimum": 0
         }
@@ -41,7 +47,79 @@
     },
     "boot_timeline": {
       "type": "object",
-      "additionalProperties": true
+      "required": [
+        "segments",
+        "boot_outcome"
+      ],
+      "properties": {
+        "segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "segment_id",
+              "start_line",
+              "end_line",
+              "phases"
+            ],
+            "properties": {
+              "segment_id": {
+                "type": "string"
+              },
+              "start_line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "end_line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "phases": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "phase",
+                    "start_line",
+                    "end_line",
+                    "confidence"
+                  ],
+                  "properties": {
+                    "phase": {
+                      "type": "string",
+                      "enum": [
+                        "SEC",
+                        "PEI",
+                        "DXE",
+                        "BDS"
+                      ]
+                    },
+                    "start_line": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "end_line": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "confidence": {
+                      "type": "number",
+                      "minimum": 0.0,
+                      "maximum": 1.0
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "boot_outcome": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "signals": {
       "type": "object",

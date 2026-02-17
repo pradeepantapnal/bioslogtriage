@@ -1,0 +1,14 @@
+Firmware boot initiated
+SEC Entry point reached
+SecCore startup complete
+CPU temporary memory configured
+PEI dispatch begins
+PeiCore: memory discovered
+PPI install complete
+DXE IPL handoff
+DxeCore: driver execution environment ready
+Driver loading sequence started
+BDS connect all devices
+BdsDxe: selecting boot option
+Boot Device Selection finished
+OS loader launched
