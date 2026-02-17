@@ -80,6 +80,7 @@ def test_llm_synthesis_invalid_response_uses_fallback(monkeypatch, capsys) -> No
     assert data["llm_synthesis"]["recommended_next_actions"] == []
     assert data["llm_synthesis"]["missing_evidence"] == []
     assert data["llm_synthesis"]["errors"]
+    assert data["llm_synthesis"]["errors"][0]["candidate_keys"] == sorted(invalid_synthesis.keys())
     validate_output(data)
 
 
