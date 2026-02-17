@@ -132,7 +132,16 @@ def _select_boot_blocking_event_id(events: list[dict]) -> str | None:
 
 
 
-def _llm_fallback(error_type: str, message: str, detail: str = "") -> dict:
+def _llm_fallback(
+    error_type: str,
+    message: str,
+    detail: str = "",
+    model: str = "",
+    timeout_s: int = 0,
+    prompt_len: int = 0,
+    candidate_keys: list[str] | None = None,
+) -> dict:
+    keys = candidate_keys if candidate_keys is not None else []
     return {
         "overall_confidence": 0.0,
         "executive_summary": "LLM synthesis failed; see errors.",
@@ -144,6 +153,10 @@ def _llm_fallback(error_type: str, message: str, detail: str = "") -> dict:
                 "type": error_type,
                 "message": message,
                 "detail": detail,
+                "model": model,
+                "timeout_s": timeout_s,
+                "prompt_len": prompt_len,
+                "candidate_keys": keys,
             }
         ],
     }
@@ -358,6 +371,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.llm:
         llm_ok = False
+        model_name = args.model
+        timeout_s = max(1, args.llm_timeout_s)
+        prompt_len = 0
+        candidate_keys: list[str] = []
         try:
             evidence_pack = build_evidence_pack(
                 output,
@@ -367,15 +384,19 @@ def main(argv: list[str] | None = None) -> int:
             output["llm_input"] = evidence_pack
 
             user_prompt = build_user_prompt(evidence_pack)
+            prompt_len = len(user_prompt)
             if args.dump_llm_prompt:
                 Path(args.dump_llm_prompt).write_text(user_prompt, encoding="utf-8")
 
-            client = OllamaClient(host=args.ollama_host, model=args.model, timeout_s=max(1, args.llm_timeout_s))
+            client = OllamaClient(host=args.ollama_host, model=model_name, timeout_s=timeout_s)
             candidate = client.generate_json(
                 system=build_system_prompt(),
                 user=user_prompt,
                 schema={"type": "object"},
             )
+            if not isinstance(candidate, dict):
+                raise ValueError("LLM returned non-object JSON")
+            candidate_keys = sorted(candidate.keys())
             _validate_llm_synthesis(candidate)
             output["llm_synthesis"] = candidate
             llm_ok = True
@@ -384,6 +405,10 @@ def main(argv: list[str] | None = None) -> int:
                 error_type=exc.__class__.__name__,
                 message="Failed to generate or validate LLM synthesis",
                 detail=str(exc),
+                model=model_name,
+                timeout_s=timeout_s,
+                prompt_len=prompt_len,
+                candidate_keys=candidate_keys,
             )
 
         if not llm_ok:
@@ -393,6 +418,10 @@ def main(argv: list[str] | None = None) -> int:
                     error_type="RuntimeError",
                     message="Failed to generate or validate LLM synthesis",
                     detail="LLM synthesis status unknown",
+                    model=model_name,
+                    timeout_s=timeout_s,
+                    prompt_len=prompt_len,
+                    candidate_keys=candidate_keys,
                 ),
             )
 
