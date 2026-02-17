@@ -141,12 +141,20 @@ def _select_best_llm_event_id(output: dict) -> str:
     llm_input = output.get("llm_input")
     if isinstance(llm_input, dict):
         selected_events = llm_input.get("selected_events")
-        if isinstance(selected_events, list):
-            for event in selected_events:
-                if isinstance(event, dict):
-                    event_id = event.get("event_id")
-                    if isinstance(event_id, str) and event_id:
-                        return event_id
+        if isinstance(selected_events, list) and selected_events:
+            first = selected_events[0]
+            if isinstance(first, dict):
+                event_id = first.get("event_id")
+                if isinstance(event_id, str) and event_id:
+                    return event_id
+
+    events = output.get("events")
+    if isinstance(events, list) and events:
+        first = events[0]
+        if isinstance(first, dict):
+            event_id = first.get("event_id")
+            if isinstance(event_id, str) and event_id:
+                return event_id
 
     return "evt-0"
 
