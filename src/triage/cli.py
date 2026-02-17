@@ -7,6 +7,8 @@ import json
 import sys
 
 from triage.config import DEFAULT_MODEL, OLLAMA_HOST
+from triage.normalize import load_and_normalize, normalization_stats
+from triage.phases import build_segments, detect_phases
 from triage.schemas.validate import validate_output
 
 
@@ -39,14 +41,35 @@ def main(argv: list[str] | None = None) -> int:
     """Entrypoint for the triage CLI."""
     args = build_parser().parse_args(argv)
 
-    with open(args.input, "r", encoding="utf-8", errors="replace") as handle:
-        log_text = handle.read()
+    lines = load_and_normalize(args.input)
+    phases = detect_phases(lines)
+    segments = build_segments(lines, phases)
 
     output = {
         "schema_version": "0.0.0",
-        "normalization": {"line_count": len(log_text.splitlines())},
+        "normalization": normalization_stats(lines),
         "events": [],
         "llm_enabled": args.llm,
+        "boot_timeline": {
+            "segments": [
+                {
+                    "segment_id": segment.segment_id,
+                    "start_line": segment.start_line,
+                    "end_line": segment.end_line,
+                    "phases": [
+                        {
+                            "phase": phase.phase,
+                            "start_line": phase.start_line,
+                            "end_line": phase.end_line,
+                            "confidence": phase.confidence,
+                        }
+                        for phase in segment.phases
+                    ],
+                }
+                for segment in segments
+            ],
+            "boot_outcome": "unknown",
+        },
     }
 
     if args.validate:
