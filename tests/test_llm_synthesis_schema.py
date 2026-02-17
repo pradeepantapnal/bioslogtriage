@@ -81,3 +81,25 @@ def test_llm_synthesis_invalid_response_uses_fallback(monkeypatch, capsys) -> No
     assert data["llm_synthesis"]["missing_evidence"] == []
     assert data["llm_synthesis"]["errors"]
     validate_output(data)
+
+
+def test_llm_synthesis_generation_exception_uses_fallback(monkeypatch, capsys) -> None:
+    fixture_path = Path("fixtures/synthetic_logs/minimal_boot.log")
+
+    def _raise_generate_json(self, system, user, schema):
+        raise ValueError("simulated generation failure")
+
+    monkeypatch.setattr(
+        "triage.llm.ollama_client.OllamaClient.generate_json",
+        _raise_generate_json,
+    )
+
+    exit_code = cli.main(["--input", str(fixture_path), "--llm"])
+
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert exit_code == 0
+    assert data["llm_synthesis"]["overall_confidence"] == 0.0
+    assert data["llm_synthesis"]["errors"]
+    assert data["llm_synthesis"]["errors"][0]["type"] == "ValueError"
+    validate_output(data)
