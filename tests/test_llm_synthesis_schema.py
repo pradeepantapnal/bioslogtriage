@@ -56,7 +56,7 @@ def test_llm_synthesis_valid_response_passes(monkeypatch, capsys) -> None:
     validate_output(data)
 
 
-def test_llm_synthesis_invalid_response_uses_fallback(monkeypatch, capsys) -> None:
+def test_llm_synthesis_invalid_response_is_repaired(monkeypatch, capsys) -> None:
     fixture_path = Path("fixtures/synthetic_logs/minimal_boot.log")
 
     invalid_synthesis = {
@@ -75,13 +75,12 @@ def test_llm_synthesis_invalid_response_uses_fallback(monkeypatch, capsys) -> No
     captured = capsys.readouterr()
     data = json.loads(captured.out)
     assert exit_code == 0
-    assert data["llm_synthesis"]["overall_confidence"] == 0.0
-    assert data["llm_synthesis"]["executive_summary"] == "LLM synthesis failed; see errors."
+    assert data["llm_synthesis"]["overall_confidence"] == 0.2
+    assert data["llm_synthesis"]["executive_summary"] == invalid_synthesis["executive_summary"]
     assert data["llm_synthesis"]["root_cause_hypotheses"] == []
     assert data["llm_synthesis"]["recommended_next_actions"] == []
     assert data["llm_synthesis"]["missing_evidence"] == []
-    assert data["llm_synthesis"]["errors"]
-    assert data["llm_synthesis"]["errors"][0]["candidate_keys"] == sorted(invalid_synthesis.keys())
+    assert "errors" not in data["llm_synthesis"]
     validate_output(data)
 
 
