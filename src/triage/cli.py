@@ -171,6 +171,7 @@ def _validate_llm_synthesis(llm_synthesis: dict) -> None:
             "executive_summary",
             "root_cause_hypotheses",
             "recommended_next_actions",
+            "missing_evidence",
         ],
         "properties": {
             "model_info": {"type": "object", "additionalProperties": True},
@@ -283,6 +284,7 @@ def _validate_llm_synthesis(llm_synthesis: dict) -> None:
             "executive_summary",
             "root_cause_hypotheses",
             "recommended_next_actions",
+            "missing_evidence",
         }
         missing = required - set(llm_synthesis.keys())
         if missing:
@@ -397,6 +399,11 @@ def main(argv: list[str] | None = None) -> int:
             if not isinstance(candidate, dict):
                 raise ValueError("LLM returned non-object JSON")
             candidate_keys = sorted(candidate.keys())
+            if isinstance(candidate.get("llm_synthesis"), dict):
+                candidate = candidate["llm_synthesis"]
+                candidate_keys = sorted(candidate.keys())
+            if "evidence_pack" in candidate or "selected_events" in candidate:
+                raise ValueError("LLM echoed input evidence pack instead of producing llm_synthesis")
             _validate_llm_synthesis(candidate)
             output["llm_synthesis"] = candidate
             llm_ok = True
