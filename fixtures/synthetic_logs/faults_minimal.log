@@ -1,0 +1,3 @@
+ASSERT [CpuDxe] Something failed
+watchdog timeout waiting for handshake
+reset cause: warm reset after watchdog reset
