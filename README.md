@@ -107,6 +107,14 @@ Expected output:
 bioslogtriage CLI
 ```
 
+### Triage a local log file
+
+```bash
+python -m triage.cli --input ./logs/test.log
+```
+
+This runs local (non-LLM) triage and prints a small JSON summary with line, warning, and error counts.
+
 ### Run with local LLM enabled
 
 ```bash
