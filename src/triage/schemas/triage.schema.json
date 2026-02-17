@@ -330,6 +330,142 @@
     "llm_synthesis": {
       "type": "object",
       "additionalProperties": true
+    },
+    "llm_input": {
+      "type": "object",
+      "required": [
+        "boot_timeline",
+        "selected_events",
+        "evidence_pack_meta"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "boot_timeline": {
+          "type": "object",
+          "required": [
+            "segments",
+            "boot_blocking_event_id"
+          ],
+          "properties": {
+            "segments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "segment_id",
+                  "start_line",
+                  "end_line",
+                  "phases"
+                ],
+                "properties": {
+                  "segment_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "start_line": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "end_line": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "phases": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "phase",
+                        "start_line",
+                        "end_line"
+                      ],
+                      "properties": {
+                        "phase": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "start_line": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "end_line": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "boot_blocking_event_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "selected_events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "evidence_pack_meta": {
+          "type": "object",
+          "required": [
+            "top_k_requested",
+            "events_included",
+            "max_chars",
+            "final_chars",
+            "trimming_applied"
+          ],
+          "properties": {
+            "top_k_requested": {
+              "type": "integer"
+            },
+            "events_included": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_chars": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "final_chars": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "trimming_applied": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": true
