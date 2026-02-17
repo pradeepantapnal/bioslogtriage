@@ -11,10 +11,11 @@ requires-python = ">=3.10"
 dependencies = [
   "requests>=2.31",
   "jsonschema>=4.0",
+  "PyYAML>=6.0",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-triage = ["schemas/*.json"]
+triage = ["schemas/*.json", "rulepacks/*.yaml"]

@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "rules": [
+    {
+      "id": "R_ASSERT_001",
+      "category": "fault.assert",
+      "severity": "fatal",
+      "confidence": 0.95,
+      "regex": "(?i)(?:\\bASSERT\\b|\\bDebugAssert\\w*\\b)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_WATCHDOG_001",
+      "category": "fault.watchdog",
+      "severity": "high",
+      "confidence": 0.9,
+      "regex": "(?i)(?:\\bwatchdog\\b|\\bWDT\\b|\\bwatchdog\\b.{0,20}\\btimeout\\b|\\bWDT\\b.{0,20}\\btimeout\\b)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_RESET_CAUSE_001",
+      "category": "fault.reset_cause",
+      "severity": "high",
+      "confidence": 0.88,
+      "regex": "(?i)(?:\\breset cause\\b|\\bcold reset\\b|\\bwarm reset\\b|\\bpower cycle\\b|\\bwatchdog reset\\b)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_EXCEPTION_001",
+      "category": "fault.exception",
+      "severity": "fatal",
+      "confidence": 0.92,
+      "regex": "(?i)(?:\\bpage fault\\b|\\bgeneral protection\\b|\\bexception\\b|\\bfault\\b)",
+      "required_phase": null,
+      "extracts": {}
+    }
+  ]
+}
