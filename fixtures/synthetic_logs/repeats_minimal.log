@@ -1,0 +1,6 @@
+SEC Core entry
+ASSERT [core] boot guard failed
+PEI pre-memory init
+DXE drivers loading
+ASSERT [core] boot guard failed
+BDS handoff

@@ -15,6 +15,8 @@ from triage.rules.loader import load_rulepack
 from triage.schemas.validate import validate_output
 
 _DEFAULT_RULEPACK = Path(__file__).resolve().parent / "rulepacks" / "faults_v1.yaml"
+_SEVERITY_SCORES = {"fatal": 100, "high": 60, "medium": 30, "low": 10, "info": 1}
+_PHASE_PENALTIES = {"SEC": 0, "PEI": 2, "DXE": 4, "BDS": 6}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,6 +36,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable deterministic rule-based event extraction",
     )
+    parser.add_argument(
+        "--context-lines",
+        type=int,
+        default=20,
+        help="Number of lines before/after event hit line to include as evidence context (default: 20)",
+    )
+    parser.add_argument(
+        "--no-evidence",
+        action="store_true",
+        help="Omit evidence.lines payload and keep only evidence references/ranges",
+    )
 
     validation_group = parser.add_mutually_exclusive_group()
     validation_group.add_argument(
@@ -52,6 +65,29 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _boot_blocking_score(event: dict) -> int:
+    severity_score = _SEVERITY_SCORES.get(str(event.get("severity", "")).lower(), 0)
+    confidence = float(event.get("confidence", 0.0))
+    phase = event.get("where", {}).get("phase")
+    phase_penalty = _PHASE_PENALTIES.get(phase, 0)
+    return severity_score + round(confidence * 20) - phase_penalty
+
+
+def _select_boot_blocking_event_id(events: list[dict]) -> str | None:
+    blocking = [event for event in events if event.get("boot_blocking")]
+    if not blocking:
+        return None
+
+    selected = max(
+        blocking,
+        key=lambda event: (
+            _boot_blocking_score(event),
+            -int(event.get("where", {}).get("line_range", {}).get("start", 10**9)),
+        ),
+    )
+    return selected.get("event_id")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entrypoint for the triage CLI."""
     args = build_parser().parse_args(argv)
@@ -64,7 +100,13 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_rules:
         rulepack = load_rulepack(args.rules)
         rules = compile_rules(rulepack)
-        events = run_rules(lines, segments, rules)
+        events = run_rules(
+            lines,
+            segments,
+            rules,
+            context_lines=max(0, args.context_lines),
+            include_evidence_lines=(not args.no_evidence),
+        )
 
     boot_timeline: dict[str, object] = {
         "segments": [
@@ -85,11 +127,8 @@ def main(argv: list[str] | None = None) -> int:
             for segment in segments
         ],
         "boot_outcome": "unknown",
+        "boot_blocking_event_id": _select_boot_blocking_event_id(events),
     }
-
-    first_fatal = next((event for event in events if event["severity"] == "fatal"), None)
-    if first_fatal is not None:
-        boot_timeline["boot_blocking_event_id"] = first_fatal["event_id"]
 
     output = {
         "schema_version": "0.0.0",
