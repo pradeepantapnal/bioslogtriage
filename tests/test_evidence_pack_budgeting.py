@@ -111,7 +111,9 @@ def test_cli_llm_sends_budgeted_prompt_and_timeout(monkeypatch, capsys) -> None:
     assert isinstance(payload, dict)
     assert len(str(payload["prompt"])) <= 5000
     assert captured["timeout_s"] == 321
-    prompt_json = json.loads(str(payload["prompt"]).splitlines()[-1])
+    prompt_lines = str(payload["prompt"]).splitlines()
+    prompt_json = json.loads(prompt_lines[1])
+    assert prompt_lines[0] == "INPUT EVIDENCE (do not copy to output):"
     assert "selected_events" in prompt_json
     assert "events" not in prompt_json
     assert parsed["llm_input"]["evidence_pack_meta"]["max_chars"] == 5000
