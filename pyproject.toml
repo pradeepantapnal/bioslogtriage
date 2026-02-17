@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "Utilities for ingesting and triaging BIOS logs"
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+  "requests>=2.31",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
