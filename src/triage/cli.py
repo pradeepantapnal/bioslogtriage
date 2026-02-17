@@ -369,19 +369,28 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.dump_llm_prompt).write_text(user_prompt, encoding="utf-8")
 
         client = OllamaClient(host=args.ollama_host, model=args.model, timeout_s=max(1, args.llm_timeout_s))
+        llm_ok = False
         try:
-            llm_synthesis = client.generate_json(
+            candidate = client.generate_json(
                 system=build_system_prompt(),
                 user=user_prompt,
                 schema={"type": "object"},
             )
-            _validate_llm_synthesis(llm_synthesis)
-            output["llm_synthesis"] = llm_synthesis
+            _validate_llm_synthesis(candidate)
+            output["llm_synthesis"] = candidate
+            llm_ok = True
         except Exception as exc:  # noqa: BLE001
             output["llm_synthesis"] = _llm_fallback(
                 error_type=exc.__class__.__name__,
                 message="Failed to generate or validate LLM synthesis",
                 detail=str(exc),
+            )
+
+        if not llm_ok and "llm_synthesis" not in output:
+            output["llm_synthesis"] = _llm_fallback(
+                error_type="RuntimeError",
+                message="Failed to generate or validate LLM synthesis",
+                detail="LLM synthesis status unknown",
             )
 
     if args.validate:
