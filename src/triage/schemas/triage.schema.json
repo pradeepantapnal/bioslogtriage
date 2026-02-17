@@ -42,7 +42,8 @@
           "confidence",
           "boot_blocking",
           "where",
-          "rule_hits"
+          "rule_hits",
+          "fingerprint"
         ],
         "properties": {
           "event_id": {
@@ -111,6 +112,13 @@
                   }
                 },
                 "additionalProperties": false
+              },
+              "other_lines": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1
+                }
               }
             },
             "additionalProperties": false
@@ -141,6 +149,75 @@
                   "type": "number",
                   "minimum": 0.0,
                   "maximum": 1.0
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "fingerprint": {
+            "type": "object",
+            "required": [
+              "stable_key",
+              "dedupe_group"
+            ],
+            "properties": {
+              "stable_key": {
+                "type": "string"
+              },
+              "dedupe_group": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "occurrences": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "ref",
+                "kind",
+                "start_line",
+                "end_line"
+              ],
+              "properties": {
+                "ref": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "start_line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "end_line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "lines": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "idx",
+                      "text"
+                    ],
+                    "properties": {
+                      "idx": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
                 }
               },
               "additionalProperties": false
@@ -231,7 +308,10 @@
           "type": "string"
         },
         "boot_blocking_event_id": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
