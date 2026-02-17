@@ -1,0 +1,85 @@
+{
+  "version": "1.0",
+  "rules": [
+    {
+      "id": "R_PCIE_ENUM_MILESTONE_001",
+      "category": "pcie.enum",
+      "subcategory": "enumeration_milestone",
+      "severity": "info",
+      "base_confidence": 0.88,
+      "regex": "(?i)(?:\\bPCI enumeration\\b|\\bEnumerating bus\\b|\\bRoot Port\\b|\\bScanning bus\\b|\\bAssigning bus numbers\\b|\\bResource allocation\\b)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_PCIE_LINK_ISSUE_FATAL_001",
+      "category": "pcie.enum",
+      "subcategory": "link_training_issue",
+      "severity": "fatal",
+      "base_confidence": 0.95,
+      "regex": "(?i)(?:\\bPCIe\\b|\\bLTSSM\\b|\\blink training\\b|\\bretrain\\b|\\bequalization\\b|\\bRP\\d+\\b|\\bRoot Port\\b).*(?:\\blink down\\b|\\blink training fail\\b|\\bLTSSM\\b|\\bretrain\\b|\\bequalization fail\\b|\\btimeout\\b).*(?:fatal|cannot continue|abort)|(?:fatal|cannot continue|abort).*(?:\\blink down\\b|\\blink training fail\\b|\\bLTSSM\\b|\\bretrain\\b|\\bequalization fail\\b|\\btimeout\\b)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_PCIE_BDF_LINK_ISSUE_001",
+      "category": "pcie.enum",
+      "subcategory": "link_training_issue",
+      "severity": "high",
+      "base_confidence": 0.93,
+      "regex": "(?i)(?:\\bRP(?P<rp>\\d+)\\b.*)?(?P<bdf>(?:[0-9a-f]{4}:)?[0-9a-f]{2}:[0-9a-f]{2}\\.[0-7]).*(?:link down|link training fail|equalization fail|LTSSM|retrain|timeout)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_PCIE_BUS_DEV_FUNC_ISSUE_001",
+      "category": "pcie.enum",
+      "subcategory": "device_link_issue",
+      "severity": "high",
+      "base_confidence": 0.92,
+      "regex": "(?i)(?:\\bRP(?P<rp>\\d+)\\b.*)?bus\\s*(?P<bus>\\d+)\\s*dev\\s*(?P<dev>[0-9a-f]{1,2})\\s*func\\s*(?P<func>\\d+).*(?:link down|link training fail|equalization fail|LTSSM|retrain|timeout)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_PCIE_LINK_ISSUE_HIGH_001",
+      "category": "pcie.enum",
+      "subcategory": "link_training_issue",
+      "severity": "high",
+      "base_confidence": 0.9,
+      "regex": "(?i)(?:\\bPCIe\\b|\\bLTSSM\\b|\\blink training\\b|\\bretrain\\b|\\bequalization\\b|\\bRP\\d+\\b|\\bRoot Port\\b).*(?:\\blink down\\b|\\blink training fail\\b|\\bLTSSM\\b|\\bretrain\\b|\\bequalization fail\\b|\\btimeout\\b)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_PCIE_RESOURCE_FAIL_001",
+      "category": "pcie.enum",
+      "subcategory": "resource_failure",
+      "severity": "high",
+      "base_confidence": 0.92,
+      "regex": "(?i)(?:No resources|Out of resources|BAR.*fail|BAR.*invalid|Bus number assignment failed|resource allocation failed)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_PCIE_NO_DEVICE_FAIL_HIGH_001",
+      "category": "pcie.enum",
+      "subcategory": "no_device_present",
+      "severity": "high",
+      "base_confidence": 0.9,
+      "regex": "(?i)No device present.*(?:fail|failed|error|fatal|cannot continue|abort)|(?:fail|failed|error|fatal|cannot continue|abort).*No device present",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_PCIE_NO_DEVICE_MEDIUM_001",
+      "category": "pcie.enum",
+      "subcategory": "no_device_present",
+      "severity": "medium",
+      "base_confidence": 0.82,
+      "regex": "(?i)No device present",
+      "required_phase": null,
+      "extracts": {}
+    }
+  ]
+}

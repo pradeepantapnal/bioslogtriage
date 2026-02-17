@@ -22,7 +22,7 @@ def test_cli_outputs_stub_json(tmp_path, capsys) -> None:
     out = capsys.readouterr().out
     parsed = json.loads(out)
     assert exit_code == 0
-    assert parsed["schema_version"] == "0.0.0"
+    assert parsed["schema_version"] == "0.1.0"
     assert parsed["normalization"]["line_count"] == 3
     assert parsed["events"] == []
     assert parsed["llm_enabled"] is False

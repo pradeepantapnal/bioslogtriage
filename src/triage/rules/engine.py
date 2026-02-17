@@ -10,6 +10,8 @@ from triage.fingerprint import stable_event_fingerprint
 from triage.normalize import NormalizedLine
 from triage.phases import Segment
 
+_BDF_PATTERN = re.compile(r"^(?:(?P<domain>[0-9A-Fa-f]{4}):)?(?P<bus>[0-9A-Fa-f]{2}):(?P<dev>[0-9A-Fa-f]{2})\.(?P<func>[0-7])$")
+
 
 @dataclass(frozen=True)
 class Rule:
@@ -17,10 +19,12 @@ class Rule:
 
     id: str
     category: str
+    subcategory: str | None
     severity: str
     base_confidence: float
     pattern: re.Pattern[str]
     required_phase: str | None
+    extracts: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -49,10 +53,12 @@ def compile_rules(rulepack: dict) -> list[Rule]:
             Rule(
                 id=raw_rule["id"],
                 category=raw_rule["category"],
+                subcategory=raw_rule.get("subcategory"),
                 severity=raw_rule["severity"],
-                base_confidence=float(raw_rule["confidence"]),
+                base_confidence=float(raw_rule.get("base_confidence", raw_rule.get("confidence"))),
                 pattern=re.compile(raw_rule["regex"]),
                 required_phase=raw_rule.get("required_phase"),
+                extracts={str(k): str(v) for k, v in raw_rule.get("extracts", {}).items()},
             )
         )
     return compiled
@@ -124,6 +130,35 @@ def run_rules(
             confidence = round(confidence, 2)
 
             extracted = {key: value for key, value in match.groupdict().items() if value is not None}
+            if rule.extracts:
+                group_values = {k: v for k, v in match.groupdict().items() if v is not None}
+                for key, value in rule.extracts.items():
+                    if key in extracted:
+                        continue
+                    if value in group_values:
+                        extracted[key] = group_values[value]
+                    else:
+                        try:
+                            extracted[key] = value.format(**group_values)
+                        except KeyError:
+                            extracted[key] = value
+
+            if (
+                rule.category == "memory.mrc"
+                and rule.subcategory == "spd_addr_zero"
+                and {"mc", "ch", "dimm", "spd"}.issubset(extracted)
+            ):
+                extracted["spd_addr"] = f"0x{extracted['spd']}"
+                extracted["slot"] = f"MC{extracted['mc']}_C{extracted['ch']}_D{extracted['dimm']}"
+
+            if "bdf" in extracted and "bdf_norm" not in extracted:
+                bdf_match = _BDF_PATTERN.match(extracted["bdf"])
+                if bdf_match:
+                    domain = (bdf_match.group("domain") or "0000").lower()
+                    bus = bdf_match.group("bus").lower()
+                    dev = bdf_match.group("dev").lower()
+                    func = bdf_match.group("func")
+                    extracted["bdf_norm"] = f"{domain}:{bus}:{dev}.{func}"
             where: dict[str, Any] = {
                 "segment_id": resolved_segment,
                 "line_range": {"start": line.idx, "end": line.idx},
@@ -133,6 +168,7 @@ def run_rules(
 
             event_payload: dict[str, Any] = {
                 "category": rule.category,
+                "subcategory": rule.subcategory,
                 "severity": rule.severity,
                 "extracted": extracted,
                 "_normalized_hit_text": line.text,
@@ -156,7 +192,7 @@ def run_rules(
             event = Event(
                 event_id=f"evt-{len(deduped_events) + 1}",
                 category=rule.category,
-                subcategory=None,
+                subcategory=rule.subcategory,
                 severity=rule.severity,
                 confidence=confidence,
                 boot_blocking=(rule.severity == "fatal"),

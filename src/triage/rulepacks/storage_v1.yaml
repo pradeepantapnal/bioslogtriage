@@ -1,0 +1,95 @@
+{
+  "version": "1.0",
+  "rules": [
+    {
+      "id": "R_NVME_MILESTONE_001",
+      "category": "storage.nvme",
+      "subcategory": "milestone",
+      "severity": "info",
+      "base_confidence": 0.86,
+      "regex": "(?i)(?:\\bNVMe\\b.*(?:init|enumerat|identify|namespace|controller)|\\bPCIe storage\\b)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_NVME_FAIL_FATAL_001",
+      "category": "storage.nvme",
+      "subcategory": "timeout_or_identify_fail",
+      "severity": "fatal",
+      "base_confidence": 0.95,
+      "regex": "(?i)(?:Identify Controller.*fail|Identify Namespace.*fail|admin queue.*timeout|I/O timeout|controller reset|(?:CQ|SQ).*timeout|Completion timeout).*(?:fatal|abort|cannot continue|boot failed)|(?:fatal|abort|cannot continue|boot failed).*(?:Identify Controller.*fail|Identify Namespace.*fail|admin queue.*timeout|I/O timeout|controller reset|(?:CQ|SQ).*timeout|Completion timeout)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_NVME_BDF_NSID_FAIL_HIGH_001",
+      "category": "storage.nvme",
+      "subcategory": "timeout_or_identify_fail",
+      "severity": "high",
+      "base_confidence": 0.93,
+      "regex": "(?i)(?P<bdf>(?:[0-9a-f]{4}:)?[0-9a-f]{2}:[0-9a-f]{2}\\.[0-7]).*nsid\\s*(?P<nsid>\\d+).*(?:Identify Controller.*fail|Identify Namespace.*fail|admin queue.*timeout|I/O timeout|controller reset|(?:CQ|SQ).*timeout|Completion timeout)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_NVME_BDF_NSID_EQ_FAIL_HIGH_001",
+      "category": "storage.nvme",
+      "subcategory": "timeout_or_identify_fail",
+      "severity": "high",
+      "base_confidence": 0.93,
+      "regex": "(?i)(?P<bdf>(?:[0-9a-f]{4}:)?[0-9a-f]{2}:[0-9a-f]{2}\\.[0-7]).*NSID=(?P<nsid>\\d+).*(?:Identify Controller.*fail|Identify Namespace.*fail|admin queue.*timeout|I/O timeout|controller reset|(?:CQ|SQ).*timeout|Completion timeout)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_NVME_BDF_FAIL_HIGH_001",
+      "category": "storage.nvme",
+      "subcategory": "timeout_or_identify_fail",
+      "severity": "high",
+      "base_confidence": 0.92,
+      "regex": "(?i)(?P<bdf>(?:[0-9a-f]{4}:)?[0-9a-f]{2}:[0-9a-f]{2}\\.[0-7]).*(?:Identify Controller.*fail|Identify Namespace.*fail|admin queue.*timeout|I/O timeout|controller reset|(?:CQ|SQ).*timeout|Completion timeout)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_NVME_FAIL_HIGH_001",
+      "category": "storage.nvme",
+      "subcategory": "timeout_or_identify_fail",
+      "severity": "high",
+      "base_confidence": 0.9,
+      "regex": "(?i)(?:Identify Controller.*fail|Identify Namespace.*fail|admin queue.*timeout|I/O timeout|controller reset|(?:CQ|SQ).*timeout|Completion timeout)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_SATA_MILESTONE_001",
+      "category": "storage.sata",
+      "subcategory": "milestone",
+      "severity": "info",
+      "base_confidence": 0.84,
+      "regex": "(?i)(?:\\bAHCI\\b.*(?:init|start)|\\bSATA\\b.*(?:link up|device detected|identify))",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_SATA_PORT_FAIL_HIGH_001",
+      "category": "storage.sata",
+      "subcategory": "reset_fail",
+      "severity": "high",
+      "base_confidence": 0.92,
+      "regex": "(?i)Port\\s*(?P<port>\\d+).*(?:reset failed|device not ready|No media|Identify Device.*fail|SATA.*timeout|COMRESET.*fail)",
+      "required_phase": null,
+      "extracts": {}
+    },
+    {
+      "id": "R_SATA_FAIL_HIGH_001",
+      "category": "storage.sata",
+      "subcategory": "reset_fail",
+      "severity": "high",
+      "base_confidence": 0.9,
+      "regex": "(?i)(?:SATA.*timeout|COMRESET.*fail|Port.*reset failed|device not ready|No media|Identify Device.*fail)",
+      "required_phase": null,
+      "extracts": {}
+    }
+  ]
+}
