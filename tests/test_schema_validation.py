@@ -34,3 +34,26 @@ def test_validate_output_raises_when_required_field_missing() -> None:
 
     with pytest.raises(ValueError, match="schema_version"):
         validate_output(data)
+
+
+def test_validate_output_accepts_trimming_count_in_evidence_pack_meta() -> None:
+    data = {
+        "schema_version": "0.0.0",
+        "normalization": {"line_count": 1},
+        "events": [],
+        "llm_enabled": True,
+        "llm_input": {
+            "boot_timeline": {"segments": [], "boot_blocking_event_id": None},
+            "selected_events": [],
+            "evidence_pack_meta": {
+                "top_k_requested": 5,
+                "events_included": 0,
+                "max_chars": 5000,
+                "final_chars": 250,
+                "trimming_applied": [],
+                "trimming_count": 0,
+            },
+        },
+    }
+
+    validate_output(data)
