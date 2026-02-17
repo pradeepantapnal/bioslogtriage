@@ -14,6 +14,7 @@ from triage.llm.repair import repair_llm_synthesis
 from triage.llm.synthesis import build_system_prompt, build_user_prompt
 from triage.version import __version__
 from triage.normalize import load_and_normalize, normalization_stats
+from triage.output import apply_output_mode, extract_evidence_records
 from triage.phases import build_segments, detect_phases
 from triage.rules.engine import compile_rules, run_rules
 from triage.rules.loader import load_rulepack
@@ -89,6 +90,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-evidence",
         action="store_true",
         help="Omit evidence.lines payload and keep only evidence references/ranges",
+    )
+    parser.add_argument(
+        "--output-mode",
+        choices=("full", "slim", "tiny"),
+        default="slim",
+        help="Output verbosity mode for event evidence payloads (default: slim)",
+    )
+    parser.add_argument(
+        "--out",
+        default=None,
+        help="Optional path to write output JSON; defaults to stdout",
+    )
+    parser.add_argument(
+        "--evidence-out",
+        default=None,
+        help="Optional path to write per-evidence JSONL artifact records",
     )
 
     validation_group = parser.add_mutually_exclusive_group()
@@ -460,6 +477,18 @@ def main(argv: list[str] | None = None) -> int:
                 ),
             )
 
+    output, evidence_records = apply_output_mode(output, args.output_mode)
+
+    if args.evidence_out:
+        if args.output_mode == "full":
+            evidence_records = extract_evidence_records(output)
+        evidence_path = Path(args.evidence_out)
+        evidence_path.parent.mkdir(parents=True, exist_ok=True)
+        with evidence_path.open("w", encoding="utf-8") as handle:
+            for record in evidence_records:
+                handle.write(json.dumps(record))
+                handle.write("\n")
+
     if args.validate:
         try:
             validate_output(output)
@@ -467,7 +496,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Output validation failed: {exc}", file=sys.stderr)
             return 2
 
-    print(json.dumps(output, indent=2))
+    rendered = json.dumps(output, indent=2)
+    if args.out:
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(rendered + "\n", encoding="utf-8")
+    else:
+        print(rendered)
     return 0
 
 
