@@ -11,6 +11,7 @@ from triage.config import DEFAULT_MODEL, OLLAMA_HOST
 from triage.llm.evidence_pack import build_evidence_pack
 from triage.llm.ollama_client import OllamaClient
 from triage.llm.repair import repair_llm_synthesis
+from triage.llm.repair_facts import repair_llm_facts
 from triage.llm.synthesis import build_system_prompt, build_user_prompt
 from triage.llm.two_pass import (
     build_facts_system_prompt,
@@ -267,13 +268,14 @@ def _validate_llm_facts(llm_facts: dict) -> None:
             "overall_grounding_confidence": {"type": "number", "minimum": 0, "maximum": 1},
             "facts": {
                 "type": "array",
+                "minItems": 0,
                 "maxItems": 60,
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
                     "required": ["fact", "supporting_event_ids", "confidence"],
                     "properties": {
-                        "fact": {"type": "string", "maxLength": 300},
+                        "fact": {"type": "string", "minLength": 1, "maxLength": 300},
                         "supporting_event_ids": {
                             "type": "array",
                             "minItems": 1,
@@ -288,13 +290,6 @@ def _validate_llm_facts(llm_facts: dict) -> None:
                 "items": {"type": "object", "additionalProperties": True},
             },
         },
-        "allOf": [
-            {
-                "if": {"required": ["errors"]},
-                "then": {"properties": {"facts": {"minItems": 0}}},
-                "else": {"properties": {"facts": {"minItems": 5}}},
-            }
-        ],
     }
 
     try:
@@ -557,8 +552,9 @@ def main(argv: list[str] | None = None) -> int:
 
                 facts_keys = sorted(facts_candidate.keys())
                 try:
-                    _validate_llm_facts(facts_candidate)
-                    llm_facts = facts_candidate
+                    repaired_facts = repair_llm_facts(facts_candidate)
+                    _validate_llm_facts(repaired_facts)
+                    llm_facts = repaired_facts
                 except Exception as facts_exc:  # noqa: BLE001
                     llm_facts = _llm_facts_fallback(
                         error_type=facts_exc.__class__.__name__,

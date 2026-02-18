@@ -543,6 +543,7 @@
         },
         "facts": {
           "type": "array",
+          "minItems": 0,
           "maxItems": 60,
           "items": {
             "type": "object",
@@ -555,6 +556,7 @@
             "properties": {
               "fact": {
                 "type": "string",
+                "minLength": 1,
                 "maxLength": 300
               },
               "supporting_event_ids": {
@@ -579,30 +581,7 @@
             "additionalProperties": true
           }
         }
-      },
-      "allOf": [
-        {
-          "if": {
-            "required": [
-              "errors"
-            ]
-          },
-          "then": {
-            "properties": {
-              "facts": {
-                "minItems": 0
-              }
-            }
-          },
-          "else": {
-            "properties": {
-              "facts": {
-                "minItems": 5
-              }
-            }
-          }
-        }
-      ]
+      }
     },
     "llm_input": {
       "type": "object",

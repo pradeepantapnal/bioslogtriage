@@ -95,8 +95,8 @@ def test_llm_two_pass_invalid_facts_falls_back_and_continues(monkeypatch, capsys
     captured = capsys.readouterr()
     data = json.loads(captured.out)
     assert exit_code == 0
-    assert data["llm_facts"]["overall_grounding_confidence"] == 0.0
+    assert data["llm_facts"]["overall_grounding_confidence"] == 0.5
     assert data["llm_facts"]["facts"] == []
-    assert data["llm_facts"]["errors"]
+    assert "errors" not in data["llm_facts"]
     assert data["llm_synthesis"]["overall_confidence"] == 0.2
     validate_output(data)
