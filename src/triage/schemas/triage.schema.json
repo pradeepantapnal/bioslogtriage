@@ -223,6 +223,9 @@
               },
               "additionalProperties": false
             }
+          },
+          "hit_text": {
+            "type": "string"
           }
         },
         "additionalProperties": false

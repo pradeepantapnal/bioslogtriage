@@ -43,6 +43,7 @@ class Event:
     fingerprint: dict[str, str]
     occurrences: int
     evidence: list[dict[str, Any]]
+    hit_text: str
 
 
 def compile_rules(rulepack: dict) -> list[Rule]:
@@ -208,6 +209,7 @@ def run_rules(
                 fingerprint=fingerprint,
                 occurrences=1,
                 evidence=evidence,
+                hit_text=line.text,
             )
             deduped_events.append(event.__dict__)
             stable_index[fingerprint["stable_key"]] = len(deduped_events) - 1

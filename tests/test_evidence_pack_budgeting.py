@@ -44,6 +44,7 @@ def _make_event(event_id: str, severity: str, confidence: float, lines_count: in
                 "lines": [{"idx": idx + 1, "text": "X" * 250} for idx in range(lines_count)],
             }
         ],
+        "hit_text": f"hit-{event_id}",
     }
 
 
@@ -120,7 +121,7 @@ def test_cli_llm_sends_budgeted_prompt_and_timeout(monkeypatch, capsys) -> None:
     assert parsed["llm_input"]["evidence_pack_meta"]["max_chars"] == 5000
 
 
-def test_cli_dump_llm_prompt_writes_file(monkeypatch, tmp_path) -> None:
+def test_cli_dump_llm_prompt_writes_file(monkeypatch, capsys, tmp_path) -> None:
     dump_path = tmp_path / "prompt.json"
 
     def _fake_post(url: str, payload: dict, timeout_s: int, model: str) -> _FakeResponse:
@@ -142,6 +143,30 @@ def test_cli_dump_llm_prompt_writes_file(monkeypatch, tmp_path) -> None:
         ]
     )
 
+    captured = capsys.readouterr().out
+    parsed = json.loads(captured)
+
     assert exit_code == 0
     assert dump_path.exists()
-    assert len(dump_path.read_text(encoding="utf-8")) <= 1400
+    assert parsed["llm_input"]["evidence_pack_meta"]["final_chars"] <= 1400
+
+
+def test_build_evidence_pack_hit_line_invariant_under_trimming() -> None:
+    output = {
+        "schema_version": "0.1.0",
+        "events": [
+            _make_event("evt-1", "fatal", 0.9, 150, boot_blocking=True),
+            _make_event("evt-2", "high", 0.7, 150),
+            _make_event("evt-3", "medium", 0.6, 150),
+        ],
+        "boot_timeline": {"segments": [], "boot_blocking_event_id": "evt-1"},
+    }
+
+    pack = build_evidence_pack(output, top_k=3, max_chars=1600)
+
+    assert pack["selected_events"]
+    for event in pack["selected_events"]:
+        lines = event["evidence"][0]["lines"]
+        assert len(lines) >= 1
+        assert lines[0]["idx"] == event["where"]["line_range"]["start"]
+        assert lines[0]["text"]

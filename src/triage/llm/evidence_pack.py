@@ -88,6 +88,7 @@ def _trimmed_event(event: dict[str, Any]) -> dict[str, Any]:
         "extracted",
         "rule_hits",
         "evidence",
+        "hit_text",
     )
     trimmed = {field: copy.deepcopy(event[field]) for field in keep_fields if field in event}
 
@@ -117,38 +118,48 @@ def _serialized_size_chars(payload: dict[str, Any]) -> int:
 
 
 
-def _drop_evidence_lines(event: dict[str, Any]) -> bool:
-    changed = False
-    for evidence in event.get("evidence", []):
-        if isinstance(evidence, dict) and "lines" in evidence:
-            evidence.pop("lines", None)
-            changed = True
-    return changed
-
-
-
-def _shrink_event_lines_to_hit_line(event: dict[str, Any]) -> bool:
-    """Shrink evidence lines to only include the event hit line when available."""
-    line_start = event.get("where", {}).get("line_range", {}).get("start")
+def _ensure_hit_line_evidence(event: dict[str, Any]) -> bool:
+    """Ensure event evidence contains at least one line entry for the hit line."""
+    where = event.get("where") if isinstance(event.get("where"), dict) else {}
+    line_start = where.get("line_range", {}).get("start") if isinstance(where.get("line_range"), dict) else None
     if not isinstance(line_start, int):
         return False
 
-    changed = False
-    for evidence in event.get("evidence", []):
-        if not isinstance(evidence, dict):
-            continue
-        lines = evidence.get("lines")
-        if not isinstance(lines, list) or not lines:
-            continue
+    hit_text = event.get("hit_text")
+    if not isinstance(hit_text, str):
+        hit_text = ""
 
-        hit_line = next((line for line in lines if isinstance(line, dict) and line.get("idx") == line_start), None)
-        if hit_line is None:
-            hit_line = lines[0]
+    evidence = event.get("evidence")
+    if not isinstance(evidence, list):
+        evidence = []
+        event["evidence"] = evidence
 
-        evidence["lines"] = [copy.deepcopy(hit_line)]
-        changed = True
+    if not evidence or not isinstance(evidence[0], dict):
+        evidence.insert(
+            0,
+            {
+                "ref": f"log:{where.get('segment_id', 'seg-unknown')}:{line_start}-{line_start}",
+                "kind": "context_window",
+                "start_line": line_start,
+                "end_line": line_start,
+            },
+        )
 
-    return changed
+    first = evidence[0]
+    lines = first.get("lines")
+    hit_line = {"idx": line_start, "text": hit_text}
+    if not isinstance(lines, list) or not lines:
+        first["lines"] = [hit_line]
+        return True
+
+    matched = next((line for line in lines if isinstance(line, dict) and line.get("idx") == line_start), None)
+    if matched is None:
+        first["lines"] = [hit_line]
+        return True
+
+    text_value = matched.get("text") if isinstance(matched.get("text"), str) else hit_text
+    first["lines"] = [{"idx": line_start, "text": text_value}]
+    return True
 
 
 def build_evidence_pack(output: dict, top_k: int = 8, max_chars: int = 30000) -> dict:
@@ -169,26 +180,15 @@ def build_evidence_pack(output: dict, top_k: int = 8, max_chars: int = 30000) ->
     trimming_applied: list[str] = []
     final_chars = _serialized_size_chars(evidence_pack)
 
-    if final_chars > max_chars and selected_events:
-        for idx in range(len(selected_events) - 1, -1, -1):
-            if _drop_evidence_lines(selected_events[idx]):
-                trimming_applied.append(f"dropped_evidence_lines:event_index={idx}")
-                final_chars = _serialized_size_chars(evidence_pack)
-                if final_chars <= max_chars:
-                    break
+    for idx, event in enumerate(selected_events):
+        if _ensure_hit_line_evidence(event):
+            trimming_applied.append(f"ensured_hit_line:event_index={idx}")
+    final_chars = _serialized_size_chars(evidence_pack)
 
     while final_chars > max_chars and len(selected_events) > 1:
         selected_events.pop()
         trimming_applied.append("dropped_low_ranked_event")
         final_chars = _serialized_size_chars(evidence_pack)
-
-    if final_chars > max_chars and selected_events:
-        for idx in range(len(selected_events) - 1, -1, -1):
-            if _shrink_event_lines_to_hit_line(selected_events[idx]):
-                trimming_applied.append(f"shrunk_to_hit_line:event_index={idx}")
-                final_chars = _serialized_size_chars(evidence_pack)
-                if final_chars <= max_chars:
-                    break
 
     evidence_pack["evidence_pack_meta"] = {
         "top_k_requested": top_k,

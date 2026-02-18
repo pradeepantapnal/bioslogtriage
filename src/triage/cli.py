@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-import re
 import sys
 
 from triage.config import DEFAULT_MODEL, OLLAMA_HOST
@@ -29,6 +28,7 @@ from triage.rules.loader import load_rulepack
 from triage.schemas.validate import validate_output
 from triage.signals.progress import Marker, extract_markers
 from triage.signals.stalls import detect_stalls
+from triage.signals.enrich_events import enrich_events
 
 _DEFAULT_RULEPACK = Path(__file__).resolve().parent / "rulepacks" / "faults_v1.yaml"
 _MRC_RULEPACK = Path(__file__).resolve().parent / "rulepacks" / "mrc_v1.yaml"
@@ -36,66 +36,6 @@ _PCIE_RULEPACK = Path(__file__).resolve().parent / "rulepacks" / "pcie_v1.yaml"
 _STORAGE_RULEPACK = Path(__file__).resolve().parent / "rulepacks" / "storage_v1.yaml"
 _SEVERITY_SCORES = {"fatal": 100, "high": 60, "medium": 30, "low": 10, "info": 1}
 _PHASE_PENALTIES = {"SEC": 0, "PEI": 2, "DXE": 4, "BDS": 6}
-_WATCHDOG_PATTERN = re.compile(r"watchdog", re.IGNORECASE)
-_SUBSYSTEM_PATTERNS: dict[str, list[re.Pattern[str]]] = {
-    "spi": [re.compile(r"\bSPI\b", re.IGNORECASE)],
-    "nvme": [re.compile(r"\bNVME\b", re.IGNORECASE)],
-    "sata": [re.compile(r"\bSATA\b", re.IGNORECASE), re.compile(r"\bAHCI\b", re.IGNORECASE)],
-    "pcie": [re.compile(r"\bPCIE\b", re.IGNORECASE)],
-    "memory": [
-        re.compile(r"\bMRC\b", re.IGNORECASE),
-        re.compile(r"\bDDR\b", re.IGNORECASE),
-        re.compile(r"\bDIMM\b", re.IGNORECASE),
-        re.compile(r"\bSPD\b", re.IGNORECASE),
-    ],
-    "usb": [re.compile(r"\bUSB\b", re.IGNORECASE)],
-}
-
-
-def _event_is_watchdog(event: dict) -> bool:
-    category = str(event.get("category", ""))
-    subcategory = str(event.get("subcategory", ""))
-    rule_hits = event.get("rule_hits")
-    rule_ids = []
-    if isinstance(rule_hits, list):
-        rule_ids = [str(rule_hit.get("rule_id", "")) for rule_hit in rule_hits if isinstance(rule_hit, dict)]
-
-    return bool(
-        _WATCHDOG_PATTERN.search(category)
-        or _WATCHDOG_PATTERN.search(subcategory)
-        or any("WATCHDOG" in rule_id.upper() for rule_id in rule_ids)
-    )
-
-
-def _find_preceding_marker(markers: list[Marker], line_no: int, window: int = 2000) -> Marker | None:
-    preceding = [marker for marker in markers if marker["idx"] <= line_no]
-    if not preceding:
-        return None
-
-    marker = max(preceding, key=lambda item: item["idx"])
-    if line_no - marker["idx"] > window:
-        return None
-    return marker
-
-
-def _suspected_subsystem(lines: list[NormalizedLine], center_line: int, window: int = 2000) -> str | None:
-    start = max(1, center_line - window)
-    end = min(len(lines), center_line + window)
-    if start > end:
-        return None
-
-    scores = {name: 0 for name in _SUBSYSTEM_PATTERNS}
-    for line in lines[start - 1 : end]:
-        for subsystem, patterns in _SUBSYSTEM_PATTERNS.items():
-            for pattern in patterns:
-                if pattern.search(line.text):
-                    scores[subsystem] += 1
-
-    ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
-    if not ranked or ranked[0][1] == 0:
-        return None
-    return ranked[0][0]
-
 
 def _marker_milestone(marker: Marker) -> dict[str, str | int]:
     return {
@@ -103,34 +43,6 @@ def _marker_milestone(marker: Marker) -> dict[str, str | int]:
         "line": marker["idx"],
         "value": marker["value"],
     }
-
-
-def _enrich_watchdog_events(events: list[dict], markers: list[Marker], lines: list[NormalizedLine]) -> None:
-    for event in events:
-        if not _event_is_watchdog(event):
-            continue
-
-        where = event.get("where", {})
-        line_no = where.get("line_range", {}).get("start") if isinstance(where, dict) else None
-        if not isinstance(line_no, int):
-            continue
-
-        extracted = event.get("extracted")
-        if not isinstance(extracted, dict):
-            extracted = {}
-            event["extracted"] = extracted
-
-        marker = _find_preceding_marker(markers, line_no)
-        if marker is not None:
-            if marker["kind"] == "progress":
-                extracted["last_progress_code"] = marker["value"]
-            elif marker["kind"] == "postcode":
-                extracted["postcode_hex"] = marker["value"]
-            extracted["last_milestone_line"] = str(marker["idx"])
-
-        subsystem = _suspected_subsystem(lines, line_no)
-        if subsystem:
-            extracted["suspected_subsystem"] = subsystem
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -621,11 +533,10 @@ def main(argv: list[str] | None = None) -> int:
 
     output_signals: dict[str, object] = {}
     stalls = detect_stalls(markers, phases)
-    if stalls:
-        output_signals["stalls"] = stalls
+    output_signals["stalls"] = stalls
 
     if events:
-        _enrich_watchdog_events(events, markers, lines)
+        enrich_events(events, markers, lines, boot_timeline["boot_blocking_event_id"])
 
     output = {
         "schema_version": "0.1.0",
@@ -634,8 +545,7 @@ def main(argv: list[str] | None = None) -> int:
         "llm_enabled": args.llm,
         "boot_timeline": boot_timeline,
     }
-    if output_signals:
-        output["signals"] = output_signals
+    output["signals"] = output_signals
 
     if args.llm:
         llm_ok = False
