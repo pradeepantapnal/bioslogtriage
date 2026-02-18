@@ -1,0 +1,12 @@
+[0001] SEC Entry
+[0002] POSTCODE = <0000AA10>
+[0003] PROGRESS CODE: PEI INIT
+[0004] PEI memory training start
+[0005] DIMM SPD read complete
+[0010] DXE phase started
+[0011] SPI flash init complete
+[0012] PROGRESS CODE: DXE PCI
+[0013] POSTCODE = <0000DB03>
+[0014] SPI controller timeout observed
+[0015] WDT: WATCHDOG timeout waiting for boot handoff
+[0016] BDS starting

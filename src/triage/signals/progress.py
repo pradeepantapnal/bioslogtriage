@@ -7,8 +7,8 @@ from typing import TypedDict
 
 from triage.normalize import NormalizedLine
 
-_POSTCODE_RE = re.compile(r"\bPOSTCODE\s*=\s*<([0-9A-Fa-f]+)>")
-_PROGRESS_RE = re.compile(r"\bPROGRESS\s+CODE:\s*([A-Za-z0-9]+)(?:\s+(\S+))?")
+_POSTCODE_RE = re.compile(r"POSTCODE\s*=\s*<(?P<pc>[0-9A-Fa-f]{8})>")
+_PROGRESS_RE = re.compile(r"PROGRESS CODE:\s*(?P<code>[A-Za-z0-9]+)\s*(?P<sfx>[A-Za-z0-9]+)?")
 
 
 class Marker(TypedDict):
@@ -29,15 +29,15 @@ def extract_markers(lines: list[NormalizedLine]) -> list[Marker]:
                 {
                     "idx": line.idx,
                     "kind": "postcode",
-                    "value": postcode_match.group(1).upper(),
+                    "value": postcode_match.group("pc").upper(),
                     "raw": line.text,
                 }
             )
 
         progress_match = _PROGRESS_RE.search(line.text)
         if progress_match:
-            progress_code = progress_match.group(1)
-            suffix = progress_match.group(2)
+            progress_code = progress_match.group("code")
+            suffix = progress_match.group("sfx")
             value = progress_code if suffix is None else f"{progress_code} {suffix}"
             markers.append(
                 {
