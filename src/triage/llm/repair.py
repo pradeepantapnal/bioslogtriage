@@ -2,15 +2,50 @@
 
 from __future__ import annotations
 
-
 def _action_from_string(text: str, best_event_id: str) -> dict:
     return {
         "action": text[:300],
         "priority": "P1",
-        "expected_signal": "Observe logs/behavior change tied to this action.",
+        "expected_signal": "Observe logs/behavior change after action.",
         "supporting_event_ids": [best_event_id],
     }
 
+def _repair_action_item(item: object, best_event_id: str) -> dict | None:
+    if isinstance(item, str):
+        normalized = item.strip()
+        if not normalized:
+            return None
+        return _action_from_string(normalized, best_event_id)
+
+    if not isinstance(item, dict):
+        return None
+
+    action = item.get("action")
+    if not isinstance(action, str) or not action.strip():
+        return None
+
+    priority = item.get("priority")
+    if priority not in {"P0", "P1", "P2"}:
+        priority = "P1"
+
+    expected_signal = item.get("expected_signal")
+    if not isinstance(expected_signal, str) or not expected_signal.strip():
+        expected_signal = "Observe logs/behavior change after action."
+
+    supporting_event_ids = item.get("supporting_event_ids")
+    if not isinstance(supporting_event_ids, list) or not supporting_event_ids:
+        supporting_event_ids = [best_event_id]
+    else:
+        supporting_event_ids = [event_id for event_id in supporting_event_ids if isinstance(event_id, str)]
+        if not supporting_event_ids:
+            supporting_event_ids = [best_event_id]
+
+    return {
+        "action": action.strip()[:300],
+        "priority": priority,
+        "expected_signal": expected_signal.strip()[:300],
+        "supporting_event_ids": supporting_event_ids,
+    }
 
 def repair_llm_synthesis(candidate: dict, best_event_id: str) -> dict:
     """Repair common llm_synthesis shape issues before validation."""
@@ -48,12 +83,12 @@ def repair_llm_synthesis(candidate: dict, best_event_id: str) -> dict:
                 hypothesis = dict(item)
                 next_actions = hypothesis.get("next_actions")
                 if isinstance(next_actions, list):
-                    hypothesis["next_actions"] = [
-                        _action_from_string(action, best_event_id)
-                        if isinstance(action, str)
-                        else action
-                        for action in next_actions
-                    ]
+                    repaired_actions = []
+                    for action in next_actions:
+                        repaired_action = _repair_action_item(action, best_event_id)
+                        if repaired_action is not None:
+                            repaired_actions.append(repaired_action)
+                    hypothesis["next_actions"] = repaired_actions
                 fixed_hypotheses.append(hypothesis)
                 continue
 
@@ -63,10 +98,12 @@ def repair_llm_synthesis(candidate: dict, best_event_id: str) -> dict:
 
     recommended_next_actions = repaired.get("recommended_next_actions")
     if isinstance(recommended_next_actions, list):
-        repaired["recommended_next_actions"] = [
-            _action_from_string(item, best_event_id) if isinstance(item, str) else item
-            for item in recommended_next_actions
-        ]
+        repaired_actions = []
+        for item in recommended_next_actions:
+            repaired_action = _repair_action_item(item, best_event_id)
+            if repaired_action is not None:
+                repaired_actions.append(repaired_action)
+        repaired["recommended_next_actions"] = repaired_actions
 
     missing_evidence = repaired.get("missing_evidence")
     if isinstance(missing_evidence, list):
