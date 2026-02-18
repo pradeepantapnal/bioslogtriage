@@ -100,6 +100,7 @@ def test_cli_llm_sends_budgeted_prompt_and_timeout(monkeypatch, capsys) -> None:
             "5000",
             "--llm-timeout-s",
             "321",
+            "--llm-one-pass",
         ]
     )
 
@@ -137,6 +138,7 @@ def test_cli_dump_llm_prompt_writes_file(monkeypatch, tmp_path) -> None:
             "1400",
             "--dump-llm-prompt",
             str(dump_path),
+            "--llm-one-pass",
         ]
     )
 
