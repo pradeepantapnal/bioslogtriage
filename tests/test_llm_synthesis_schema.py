@@ -47,7 +47,7 @@ def test_llm_synthesis_valid_response_passes(monkeypatch, capsys) -> None:
         lambda self, system, user, schema: valid_synthesis,
     )
 
-    exit_code = cli.main(["--input", str(fixture_path), "--llm"])
+    exit_code = cli.main(["--input", str(fixture_path), "--llm", "--llm-one-pass"])
 
     captured = capsys.readouterr()
     data = json.loads(captured.out)
@@ -70,7 +70,7 @@ def test_llm_synthesis_invalid_response_is_repaired(monkeypatch, capsys) -> None
         lambda self, system, user, schema: invalid_synthesis,
     )
 
-    exit_code = cli.main(["--input", str(fixture_path), "--llm"])
+    exit_code = cli.main(["--input", str(fixture_path), "--llm", "--llm-one-pass"])
 
     captured = capsys.readouterr()
     data = json.loads(captured.out)
@@ -94,7 +94,7 @@ def test_llm_synthesis_echoed_input_uses_fallback(monkeypatch, capsys) -> None:
         lambda self, system, user, schema: {"evidence_pack": {"selected_events": []}},
     )
 
-    exit_code = cli.main(["--input", str(fixture_path), "--llm"])
+    exit_code = cli.main(["--input", str(fixture_path), "--llm", "--llm-one-pass"])
 
     captured = capsys.readouterr()
     data = json.loads(captured.out)
@@ -144,7 +144,7 @@ def test_llm_synthesis_unwraps_nested_object(monkeypatch, capsys) -> None:
         lambda self, system, user, schema: wrapped_synthesis,
     )
 
-    exit_code = cli.main(["--input", str(fixture_path), "--llm"])
+    exit_code = cli.main(["--input", str(fixture_path), "--llm", "--llm-one-pass"])
 
     captured = capsys.readouterr()
     data = json.loads(captured.out)
@@ -170,7 +170,7 @@ def test_llm_synthesis_repairs_missing_evidence_strings(monkeypatch, capsys) -> 
         lambda self, system, user, schema: malformed_synthesis,
     )
 
-    exit_code = cli.main(["--input", str(fixture_path), "--llm"])
+    exit_code = cli.main(["--input", str(fixture_path), "--llm", "--llm-one-pass"])
 
     captured = capsys.readouterr()
     data = json.loads(captured.out)
@@ -192,7 +192,7 @@ def test_llm_synthesis_generation_exception_uses_fallback(monkeypatch, capsys) -
         _raise_generate_json,
     )
 
-    exit_code = cli.main(["--input", str(fixture_path), "--llm"])
+    exit_code = cli.main(["--input", str(fixture_path), "--llm", "--llm-one-pass"])
 
     captured = capsys.readouterr()
     data = json.loads(captured.out)

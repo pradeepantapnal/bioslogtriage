@@ -12,6 +12,12 @@ from triage.llm.evidence_pack import build_evidence_pack
 from triage.llm.ollama_client import OllamaClient
 from triage.llm.repair import repair_llm_synthesis
 from triage.llm.synthesis import build_system_prompt, build_user_prompt
+from triage.llm.two_pass import (
+    build_facts_system_prompt,
+    build_facts_user_prompt,
+    build_synthesis_system_prompt,
+    build_synthesis_user_prompt,
+)
 from triage.version import __version__
 from triage.normalize import load_and_normalize, normalization_stats
 from triage.output import apply_output_mode, extract_evidence_records
@@ -46,6 +52,25 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=12000,
         help="Max serialized character budget for LLM evidence pack (default: 12000)",
+    )
+    parser.add_argument(
+        "--llm-facts-max-chars",
+        type=int,
+        default=8000,
+        help="Max serialized character budget for pass2 llm_facts prompt payload (default: 8000)",
+    )
+    parser.add_argument(
+        "--llm-two-pass",
+        dest="llm_two_pass",
+        action="store_true",
+        default=True,
+        help="Use two-pass LLM analysis (default)",
+    )
+    parser.add_argument(
+        "--llm-one-pass",
+        dest="llm_two_pass",
+        action="store_false",
+        help="Use legacy one-pass LLM synthesis flow",
     )
     parser.add_argument(
         "--llm-timeout-s",
@@ -204,6 +229,89 @@ def _llm_fallback(
             }
         ],
     }
+
+
+def _llm_facts_fallback(
+    error_type: str,
+    message: str,
+    detail: str = "",
+    model: str = "",
+    timeout_s: int = 0,
+    prompt_len: int = 0,
+    candidate_keys: list[str] | None = None,
+) -> dict:
+    keys = candidate_keys if candidate_keys is not None else []
+    return {
+        "overall_grounding_confidence": 0.0,
+        "facts": [],
+        "errors": [
+            {
+                "type": error_type,
+                "message": message,
+                "detail": detail,
+                "model": model,
+                "timeout_s": timeout_s,
+                "prompt_len": prompt_len,
+                "candidate_keys": keys,
+            }
+        ],
+    }
+
+
+def _validate_llm_facts(llm_facts: dict) -> None:
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["overall_grounding_confidence", "facts"],
+        "properties": {
+            "overall_grounding_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "facts": {
+                "type": "array",
+                "maxItems": 60,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["fact", "supporting_event_ids", "confidence"],
+                    "properties": {
+                        "fact": {"type": "string", "maxLength": 300},
+                        "supporting_event_ids": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {"type": "string"},
+                        },
+                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    },
+                },
+            },
+            "errors": {
+                "type": "array",
+                "items": {"type": "object", "additionalProperties": True},
+            },
+        },
+        "allOf": [
+            {
+                "if": {"required": ["errors"]},
+                "then": {"properties": {"facts": {"minItems": 0}}},
+                "else": {"properties": {"facts": {"minItems": 5}}},
+            }
+        ],
+    }
+
+    try:
+        import jsonschema
+    except ModuleNotFoundError:
+        required = {"overall_grounding_confidence", "facts"}
+        missing = required - set(llm_facts.keys())
+        if missing:
+            raise ValueError(f"missing required keys {sorted(missing)}")
+        return
+
+    validator = jsonschema.Draft202012Validator(schema)
+    errors = sorted(validator.iter_errors(llm_facts), key=lambda err: list(err.path))
+    if errors:
+        first = errors[0]
+        path = ".".join(str(part) for part in first.path) or "<root>"
+        raise ValueError(f"llm_facts validation failed at {path}: {first.message}")
 
 
 def _validate_llm_synthesis(llm_synthesis: dict) -> None:
@@ -429,17 +537,86 @@ def main(argv: list[str] | None = None) -> int:
             )
             output["llm_input"] = evidence_pack
 
-            user_prompt = build_user_prompt(evidence_pack)
-            prompt_len = len(user_prompt)
-            if args.dump_llm_prompt:
-                Path(args.dump_llm_prompt).write_text(user_prompt, encoding="utf-8")
-
             client = OllamaClient(host=args.ollama_host, model=model_name, timeout_s=timeout_s)
-            candidate = client.generate_json(
-                system=build_system_prompt(),
-                user=user_prompt,
-                schema={"type": "object"},
-            )
+
+            if args.llm_two_pass:
+                facts_prompt = build_facts_user_prompt(evidence_pack)
+                prompt_len = len(facts_prompt)
+                if args.dump_llm_prompt:
+                    Path(args.dump_llm_prompt).write_text(
+                        f"# PASS1 FACTS\n{facts_prompt}\n", encoding="utf-8"
+                    )
+
+                facts_candidate = client.generate_json(
+                    system=build_facts_system_prompt(),
+                    user=facts_prompt,
+                    schema=None,
+                )
+                if not isinstance(facts_candidate, dict):
+                    raise ValueError("LLM facts pass returned non-object JSON")
+
+                facts_keys = sorted(facts_candidate.keys())
+                try:
+                    _validate_llm_facts(facts_candidate)
+                    llm_facts = facts_candidate
+                except Exception as facts_exc:  # noqa: BLE001
+                    llm_facts = _llm_facts_fallback(
+                        error_type=facts_exc.__class__.__name__,
+                        message="Failed to generate or validate LLM facts",
+                        detail=str(facts_exc),
+                        model=model_name,
+                        timeout_s=timeout_s,
+                        prompt_len=prompt_len,
+                        candidate_keys=facts_keys,
+                    )
+                output["llm_facts"] = llm_facts
+
+                facts_json = json.dumps(llm_facts, ensure_ascii=False, separators=(",", ":"))
+                facts_budget = max(1, args.llm_facts_max_chars)
+                if len(facts_json) > facts_budget:
+                    llm_facts_for_prompt = {
+                        "overall_grounding_confidence": llm_facts.get("overall_grounding_confidence", 0.0),
+                        "facts": [],
+                    }
+                    for fact in llm_facts.get("facts", []):
+                        candidate_fact = dict(fact)
+                        next_facts = [*llm_facts_for_prompt["facts"], candidate_fact]
+                        candidate_payload = {
+                            "overall_grounding_confidence": llm_facts_for_prompt["overall_grounding_confidence"],
+                            "facts": next_facts,
+                        }
+                        if len(json.dumps(candidate_payload, ensure_ascii=False, separators=(",", ":"))) > facts_budget:
+                            break
+                        llm_facts_for_prompt["facts"] = next_facts
+                else:
+                    llm_facts_for_prompt = llm_facts
+
+                synthesis_prompt = build_synthesis_user_prompt(llm_facts_for_prompt)
+                prompt_len = len(synthesis_prompt)
+                if args.dump_llm_prompt:
+                    Path(args.dump_llm_prompt).write_text(
+                        Path(args.dump_llm_prompt).read_text(encoding="utf-8")
+                        + f"# PASS2 SYNTHESIS\n{synthesis_prompt}\n",
+                        encoding="utf-8",
+                    )
+
+                candidate = client.generate_json(
+                    system=build_synthesis_system_prompt(),
+                    user=synthesis_prompt,
+                    schema=None,
+                )
+            else:
+                user_prompt = build_user_prompt(evidence_pack)
+                prompt_len = len(user_prompt)
+                if args.dump_llm_prompt:
+                    Path(args.dump_llm_prompt).write_text(user_prompt, encoding="utf-8")
+
+                candidate = client.generate_json(
+                    system=build_system_prompt(),
+                    user=user_prompt,
+                    schema={"type": "object"},
+                )
+
             if not isinstance(candidate, dict):
                 raise ValueError("LLM returned non-object JSON")
             candidate_keys = sorted(candidate.keys())
